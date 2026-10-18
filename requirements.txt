@@ -1,0 +1,29 @@
+
+# RepoLens AI - Core dependencies
+
+# RAG framework and modular components
+langchain>=1.4.0,<2.0.0
+langchain-text-splitters>=1.1.0,<2.0.0
+langchain-google-genai>=4.4.2,<5.0.0
+langchain-chroma>=1.1.0,<2.0.0
+
+# Agentic RAG extension
+langgraph>=1.0.0,<2.0.0
+
+# Hybrid retrieval
+rank-bm25>=0.2.2,<0.3.0
+
+# Application interface
+streamlit>=1.66.0,<2.0.0
+
+# Backend API
+fastapi>=0.120.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+
+# Configuration and secrets
+python-dotenv>=1.0.0,<2.0.0
+pydantic-settings>=2.7.0,<3.0.0
+
+# Evaluation and testing
+pandas>=2.2.0,<4.0.0
+pytest>=8.0.0,<10.0.0

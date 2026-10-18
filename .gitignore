@@ -1,0 +1,29 @@
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# API keys and environment variables
+.env
+.env.*
+
+# Allow an example configuration file
+!.env.example
+
+# Generated vector database and local data
+storage/
+data/repository/
+
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE and operating-system files
+.idea/
+.DS_Store
+Thumbs.db
