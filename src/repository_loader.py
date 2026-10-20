@@ -9,6 +9,7 @@ DEFAULT_REPOSITORY = (
     / "knee-osteoarthritis-classification"
 )
 
+
 IGNORED_DIRECTORIES = {
     ".git",
     ".venv",
@@ -18,12 +19,24 @@ IGNORED_DIRECTORIES = {
     "site-packages",
     "dist",
     "build",
+    ".idea",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "storage",
 }
+
+
 
 IGNORED_FILE_NAMES = {
     ".env",
+    ".env.local",
+    ".env.production",
     "secrets.py",
+    "credentials.py",
 }
+
+
 
 IGNORED_SUFFIXES = {
     ".pyc",
@@ -33,6 +46,7 @@ IGNORED_SUFFIXES = {
     ".sqlite3",
     ".log",
 }
+
 
 
 def find_python_files(repository_path: Path) -> list[Path]:

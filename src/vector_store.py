@@ -18,10 +18,12 @@ VECTOR_STORE_PATH = PROJECT_ROOT / "storage" / "chroma_db"
 COLLECTION_NAME = "repolens_code"
 
 
-def create_documents() -> list[Document]:
-    """Convert code chunks into documents with source metadata."""
 
-    chunks = chunk_repository(DEFAULT_REPOSITORY)
+def create_documents(
+    repository_path: Path = DEFAULT_REPOSITORY,
+) -> list[Document]:
+    """Convert code chunks into documents with source metadata."""
+    chunks = chunk_repository(repository_path)
     documents = []
 
     for chunk in chunks:
@@ -35,32 +37,37 @@ def create_documents() -> list[Document]:
                 "chunk_type": chunk.chunk_type,
             },
         )
-
         documents.append(document)
 
     return documents
 
 
-def build_vector_store() -> Chroma:
-    """Embed repository code chunks and store their vectors in ChromaDB."""
 
-    documents = create_documents()
+
+def build_vector_store(
+    repository_path: Path = DEFAULT_REPOSITORY,
+    vector_store_path: Path = VECTOR_STORE_PATH,
+) -> Chroma:
+    """Embed repository code chunks and store their vectors in ChromaDB."""
+    repository_path = Path(repository_path)
+    vector_store_path = Path(vector_store_path)
+
+    documents = create_documents(repository_path)
 
     if not documents:
         raise ValueError(
-            f"No code chunks found in {DEFAULT_REPOSITORY}"
+            f"No code chunks found in {repository_path}"
         )
 
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/gemini-embedding-001"
     )
 
-    # Rebuild only our dedicated vector-store directory.
-    # This prevents stale chunks from previous indexing runs.
-    if VECTOR_STORE_PATH.exists():
-        shutil.rmtree(VECTOR_STORE_PATH)
+    # Rebuild only the vector-store directory selected for this run.
+    if vector_store_path.exists():
+        shutil.rmtree(vector_store_path)
 
-    VECTOR_STORE_PATH.parent.mkdir(
+    vector_store_path.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
@@ -68,14 +75,15 @@ def build_vector_store() -> Chroma:
     vector_store = Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embeddings,
-        persist_directory=str(VECTOR_STORE_PATH),
+        persist_directory=str(vector_store_path),
     )
 
     vector_store.add_documents(documents)
 
     print("Vector indexing completed successfully.")
+    print(f"Repository indexed: {repository_path}")
     print(f"Code chunks indexed: {len(documents)}")
-    print(f"Vector store location: {VECTOR_STORE_PATH}")
+    print(f"Vector store location: {vector_store_path}")
 
     return vector_store
 

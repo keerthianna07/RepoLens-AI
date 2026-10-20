@@ -84,22 +84,38 @@ def reciprocal_rank_fusion(
     ]
 
 
+
 def main() -> None:
     """Run a question through both retrievers and fuse their rankings."""
+    repository_path = Path(input(
+        "Repository path (press Enter for the default repository): "
+    ).strip() or str(
+        Path(__file__).resolve().parent.parent
+        / "data"
+        / "repository"
+        / "knee-osteoarthritis-classification"
+    )).resolve()
 
+    if not repository_path.exists() or not repository_path.is_dir():
+        print(f"Invalid repository directory: {repository_path}")
+        return
+
+    print(f"Repository: {repository_path}")
     print("Building BM25 retriever...")
-    bm25_retriever: BM25Retriever = build_retriever()
+    bm25_retriever: BM25Retriever = build_retriever(repository_path)
 
-    print("Connecting to the existing ChromaDB index...")
-
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001"
+    print("Building semantic index for this repository...")
+    vector_store_path = (
+        Path(__file__).resolve().parent.parent
+        / "storage"
+        / "chroma_db"
     )
 
-    vector_store = Chroma(
-        collection_name=COLLECTION_NAME,
-        embedding_function=embeddings,
-        persist_directory=str(VECTOR_STORE_PATH),
+    from src.vector_store import build_vector_store
+
+    vector_store = build_vector_store(
+        repository_path=repository_path,
+        vector_store_path=vector_store_path,
     )
 
     print("Hybrid retrieval is ready.")
@@ -117,13 +133,11 @@ def main() -> None:
             continue
 
         bm25_results = bm25_retriever.search(query, top_k=5)
-
         vector_results = search_similar_code(
             vector_store,
             query,
             top_k=5,
         )
-
         hybrid_results = reciprocal_rank_fusion(
             bm25_results,
             vector_results,

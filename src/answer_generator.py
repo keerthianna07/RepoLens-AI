@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from src.repository_inspector import find_model_architectures
 from src.repository_loader import DEFAULT_REPOSITORY
 
@@ -23,25 +25,73 @@ GENERATION_MODEL = "gemini-3.8-flash"
 RETRIEVAL_COUNT = 8
 
 
+
 def retrieve_evidence(
     question: str,
     bm25_retriever,
     vector_store: Chroma,
     top_k: int = RETRIEVAL_COUNT,
+    repository_path: Path = DEFAULT_REPOSITORY,
 ) -> list:
-    """Retrieve and combine relevant code chunks."""
+    """Retrieve relevant code, prioritizing explicitly mentioned files."""
+    from src.code_chunker import chunk_repository
 
+    question_lower = question.lower()
+    all_chunks = chunk_repository(repository_path)
+
+    # Match a filename explicitly mentioned in the question.
+
+    mentioned_files = {
+        str(chunk.file_path)
+        for chunk in all_chunks
+        if Path(chunk.file_path).name.lower() in question_lower
+    }
+
+    # Recognize model names even when the question omits the filename.
+    model_file_hints = {
+        "efficientnetb0": "efficientnet_b0.py",
+        "efficientnetb3": "efficientnet_b3.py",
+        "resnet50": "train_resnet50.py",
+        "vgg19": "train_vgg19.py",
+    }
+
+    for model_name, filename in model_file_hints.items():
+        if model_name in question_lower.replace("_", "").replace("-", ""):
+            mentioned_files.update(
+                str(chunk.file_path)
+                for chunk in all_chunks
+                if Path(chunk.file_path).name.lower() == filename
+            )
+
+    # For file-specific questions, retrieve only from the named file(s).
+    if mentioned_files:
+        file_chunks = [
+            chunk for chunk in all_chunks
+            if str(chunk.file_path) in mentioned_files
+        ]
+
+        # For import questions, return the import chunks from that file.
+        import_terms = (
+            "import", "imports", "imported libraries", "dependencies"
+        )
+        if any(term in question_lower for term in import_terms):
+            import_chunks = [
+                chunk for chunk in file_chunks
+                if chunk.chunk_type == "import"
+            ]
+            if import_chunks:
+                return import_chunks
+
+        # Otherwise, return chunks only from the requested file.
+        return file_chunks[:top_k]
+
+    # General questions continue to use hybrid retrieval.
     keyword_results = bm25_retriever.search(
-        question,
-        top_k=top_k,
+        question, top_k=top_k
     )
-
     semantic_results = search_similar_code(
-        vector_store,
-        question,
-        top_k=top_k,
+        vector_store, question, top_k=top_k
     )
-
     fused_results = reciprocal_rank_fusion(
         keyword_results,
         semantic_results,
@@ -49,6 +99,7 @@ def retrieve_evidence(
     )
 
     return [chunk for chunk, score in fused_results]
+
 
 
 def build_evidence_context(chunks: list) -> str:
@@ -98,10 +149,12 @@ def is_model_inventory_question(question: str) -> bool:
     )
 
 
-def build_model_inventory_context() -> str:
-    """Build source-grounded evidence from the AST inspector."""
 
-    models = find_model_architectures(DEFAULT_REPOSITORY)
+def build_model_inventory_context(
+    repository_path: Path = DEFAULT_REPOSITORY,
+) -> str:
+    """Build source-grounded evidence from the AST inspector."""
+    models = find_model_architectures(repository_path)
 
     if not models:
         return "No recognized model architecture references were found."
@@ -124,6 +177,7 @@ def generate_answer(
     question: str,
     chunks: list,
     llm: ChatGoogleGenerativeAI,
+    repository_path: Path = DEFAULT_REPOSITORY,
 ) -> str:
     """Generate an explanation grounded in retrieved source code."""
 
@@ -141,8 +195,9 @@ def generate_answer(
     inventory_context = ""
 
     if is_model_inventory_question(question):
-        inventory_context = build_model_inventory_context()
-
+        inventory_context = build_model_inventory_context(
+            repository_path
+        )
     prompt = f"""
 You are RepoLens AI, a source-code understanding assistant.
 
@@ -249,10 +304,12 @@ def main() -> None:
             continue
 
         try:
+
             chunks = retrieve_evidence(
                 question,
-                bm25_retriever,
-                vector_store,
+                st.session_state.bm25_retriever,
+                st.session_state.vector_store,
+                repository_path=repository_path,
             )
 
             answer = generate_answer(
